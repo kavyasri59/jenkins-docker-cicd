@@ -12,7 +12,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t jenkins-docker-cicd:latest .'
+                sh 'docker build --pull -t jenkins-docker-cicd:latest .'
             }
         }
 
@@ -20,19 +20,24 @@ pipeline {
             steps {
                 sh '''
                     set -e
-
-                    echo "Checking index.html exists..."
                     test -s index.html
-
-                    echo "Checking HTML structure..."
                     grep -qi '<html' index.html
                     grep -qi '</html>' index.html
                     grep -qi '</body>' index.html
-
-                    echo "Checking Docker image exists..."
-                    docker image inspect jenkins-docker-cicd:latest > /dev/null
-
+                    docker image inspect jenkins-docker-cicd:latest >/dev/null
                     echo "All application checks passed!"
+                '''
+            }
+        }
+
+        stage('Security Scan') {
+            steps {
+                sh '''
+                    set -e
+                    trivy image \
+                      --severity HIGH,CRITICAL \
+                      --exit-code 1 \
+                      jenkins-docker-cicd:latest
                 '''
             }
         }
@@ -41,7 +46,6 @@ pipeline {
             steps {
                 sh '''
                     docker rm -f jenkins-demo 2>/dev/null || true
-
                     docker run -d \
                         --name jenkins-demo \
                         --restart unless-stopped \
